@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #-------------------------------------#
-#           BT Manager 3.6            #
+#       Bluetooth Manager 3.8         #
 #            By djparent              #
 #             A fork of               #
 #         Bluetooth Manager           #
@@ -43,6 +43,7 @@ SYSTEM_LANG=""
 GPTOKEYB_PID=""
 CURR_TTY="/dev/tty1"
 ARK_UID=$(id -u ark)
+TMP_KEYS="/tmp/keys.gptk.$$"
 SCRIPT_NAME="$(basename "$0")"
 ASOUNDRC="/home/ark/.asoundrc"
 ASOUNDRC_BAK="/home/ark/.asoundrcbak"
@@ -173,7 +174,7 @@ T_RESCAN="Rescan"
 
 # --- FRANÇAIS (FR) --- 
 if [[ "$SYSTEM_LANG" == *"fr"* ]]; then
-T_BACKTITLE="Bluetooth Manager par djparent"
+T_BACKTITLE="Bluetooth Manager par Jason & djparent"
 T_STARTING="Demarrage du Bluetooth Manager ...\nVeuillez patienter."
 T_ERR_TITLE="Erreur"
 T_STOPPING="Arret du Bluetooth..."
@@ -276,7 +277,7 @@ T_RESCAN="Relancer"
 
 # --- ESPAÑOL (ES) ---
 elif [[ "$SYSTEM_LANG" == *"es"* ]]; then
-T_BACKTITLE="Bluetooth Manager por djparent"
+T_BACKTITLE="Bluetooth Manager por Jason & djparent"
 T_STARTING="Iniciando Bluetooth Manager ...\nPor favor espere."
 T_ERR_TITLE="Error"
 T_STOPPING="Deteniendo Bluetooth..."
@@ -379,7 +380,7 @@ T_RESCAN="Reescanear"
 
 # --- PORTUGUÊS (PT) ---
 elif [[ "$SYSTEM_LANG" == *"pt"* ]]; then
-T_BACKTITLE="Bluetooth Manager por djparent"
+T_BACKTITLE="Bluetooth Manager por Jason & djparent"
 T_STARTING="Iniciando Bluetooth Manager ...\nPor favor aguarde."
 T_ERR_TITLE="Erro"
 T_STOPPING="Parando Bluetooth..."
@@ -482,7 +483,7 @@ T_RESCAN="Reescanear"
 
 # --- ITALIANO (IT) ---
 elif [[ "$SYSTEM_LANG" == *"it"* ]]; then
-T_BACKTITLE="Bluetooth Manager di djparent"
+T_BACKTITLE="Bluetooth Manager di Jason & djparent"
 T_STARTING="Avvio di Bluetooth Manager ...\nAttendere prego."
 T_ERR_TITLE="Errore"
 T_STOPPING="Arresto Bluetooth..."
@@ -584,7 +585,7 @@ T_RESCAN="Ripeti scansione"
 
 # --- DEUTSCH (DE) ---
 elif [[ "$SYSTEM_LANG" == *"de"* ]]; then
-T_BACKTITLE="Bluetooth Manager von djparent"
+T_BACKTITLE="Bluetooth Manager von Jason & djparent"
 T_STARTING="Bluetooth Manager wird gestartet ...\nBitte warten."
 T_ERR_TITLE="Fehler"
 T_STOPPING="Bluetooth wird gestoppt..."
@@ -687,7 +688,7 @@ T_RESCAN="Erneut suchen"
 
 # --- POLSKI (PL) ---
 elif [[ "$SYSTEM_LANG" == *"pl"* ]]; then
-T_BACKTITLE="Bluetooth Manager przez djparent"
+T_BACKTITLE="Bluetooth Manager przez Jason & djparent"
 T_STARTING="Uruchamianie Bluetooth Manager ...\nProsze czekac."
 T_ERR_TITLE="Blad"
 T_STOPPING="Zatrzymywanie Bluetooth..."
@@ -794,11 +795,11 @@ fi
 # -------------------------------------------------------
 StartGPTKeyb() {
     pkill -9 -f gptokeyb 2>/dev/null || true
-    if [ -n "$GPTOKEYB_PID" ]; then
+    if [ -n "${GPTOKEYB_PID:-}" ]; then
         kill "$GPTOKEYB_PID" 2>/dev/null
     fi
     sleep 0.1
-    /opt/inttools/gptokeyb -1 "$0" -c "/opt/inttools/keys.gptk" > /dev/null 2>&1 &
+	/opt/inttools/gptokeyb -1 "$0" -c "$TMP_KEYS" > /dev/null 2>&1 &
     GPTOKEYB_PID=$!
 }
 
@@ -854,7 +855,7 @@ GetConnectedName() {
 }
 
 # -------------------------------------------------------
-# Route ALSA through PulseAudio (for Bluetooth audio)
+# Route ALSA through PulseAudio (for BT audio)
 # -------------------------------------------------------
 SetAsoundPulse() {
     cat <<ASOUND > "$ASOUNDRC"
@@ -911,6 +912,7 @@ ExitMenu() {
     printf "\033[H\033[2J" > "$CURR_TTY"
     printf "\e[?25h" > "$CURR_TTY"
     StopGPTKeyb
+	rm -f "$TMP_KEYS"
     if [[ ! -e "/dev/input/by-path/platform-odroidgo2-joypad-event-joystick" ]]; then
         [ -n "$ORIGINAL_FONT" ] && setfont "$ORIGINAL_FONT"
     fi
@@ -1467,33 +1469,36 @@ EnableBT() {
 	systemctl start bluetooth > /dev/null 2>&1 &
 	bluetoothctl power on > /dev/null 2>&1
 	
-	(
 	CheckPulse
-	sleep 1
 	bluetoothctl devices | awk '{print $2}' | while read -r mac; do
 		if bluetoothctl info "$mac" | grep -q "Paired: yes"; then
 			bluetoothctl connect "$mac" >/dev/null 2>&1 &
-			sleep 2
-			
 			if ! bluetoothctl info "$mac" | grep -q "Connected: yes"; then
 				bluetoothctl connect "$mac" >/dev/null 2>&1 &
 			fi
 		fi
 	done
-	sleep 2
 	ApplyAudioFix
-	) &
 }
 
+# -------------------------------------------------------
+# Disable Bluetooth
+# -------------------------------------------------------
+DisableBT() {
+	bluetoothctl power off > /dev/null 2>&1
+	systemctl stop bluetooth > /dev/null 2>&1
+	rfkill block bluetooth > /dev/null 2>&1
+	
+	ForceInternalAudio
+}
+	
 # -------------------------------------------------------
 # Toggle Bluetooth
 # -------------------------------------------------------
 ToggleBT() {
 	if GetPowerStatus; then
 		dialog --backtitle "$T_BACKTITLE" --title "$T_ACTION" --infobox "\n  $T_STOPPING" 5 35 > "$CURR_TTY"
-		bluetoothctl power off > /dev/null 2>&1
-		systemctl stop bluetooth > /dev/null 2>&1
-		ForceInternalAudio
+		DisableBT
 	else
 		dialog --backtitle "$T_BACKTITLE" --title "$T_ACTION" --infobox "\n  $T_POWERING" 5 35 > "$CURR_TTY"
 		EnableBT
@@ -2087,52 +2092,58 @@ UninstallerMenu() {
 # Main Menu
 # -------------------------------------------------------
 MainMenu() {
-  CheckDeps
-  EnsurePermissions
-  
-  while true; do
-	# Keep gptokeyb alive
-    if [[ -z $(pgrep -f gptokeyb) ]]; then
-        StartGPTKeyb
-    fi
-  
-    if GetPowerStatus; then
-        BT_STAT="\Z2$T_ON\Zn"; DEV_NAME="\Z4$(GetConnectedName)\Zn"
-		TOGGLE_LABEL="$T_DISABLE Bluetooth"
-    else
-        BT_STAT="\Z1$T_OFF\Zn"; DEV_NAME="$T_NONE"
-		TOGGLE_LABEL="$T_ENABLE Bluetooth"
-    fi
-    
-    mainselection=$(dialog --colors --backtitle "$T_BACKTITLE" --title "$T_MAIN_TITLE" --cancel-label "$T_EXIT" \
-    --menu "$T_STATUS: $BT_STAT\n$T_CONN_TO: $DEV_NAME" 14 45 6 \
-    1 "$TOGGLE_LABEL" \
-    2 "$T_M_SCAN" \
-    3 "$T_M_DISCONNECT" \
-    4 "$T_M_KNOWN" \
-    5 "$T_M_FORGET" \
-	6 "$T_MAIN_TITLE2" 2>&1 > "$CURR_TTY")
-        [ $? -ne 0 ] && ExitMenu
-    case $mainselection in
-        1) Toggle Bluetooth ;;
-        2) ScanAndConnect ;;
-        3) DisconnectProcess ;;
-        4) ListKnownAndConnect ;;
-        5) DeleteDevice ;;
-		6) UninstallerMenu ;;
-    esac
-  done
+	CheckDeps
+	EnsurePermissions
+
+	while true; do
+		# Keep gptokeyb alive
+		if [[ -z $(pgrep -f gptokeyb) ]]; then
+			StartGPTKeyb
+		fi
+	  
+		if GetPowerStatus; then
+			BT_STAT="\Z2$T_ON\Zn"; DEV_NAME="\Z4$(GetConnectedName)\Zn"
+			TOGGLE_LABEL="$T_DISABLE Bluetooth"
+		else
+			BT_STAT="\Z1$T_OFF\Zn"; DEV_NAME="$T_NONE"
+			TOGGLE_LABEL="$T_ENABLE Bluetooth"
+		fi
+		
+		mainselection=$(dialog --colors --backtitle "$T_BACKTITLE" --title "$T_MAIN_TITLE" --cancel-label "$T_EXIT" \
+		--menu "$T_STATUS: $BT_STAT\n$T_CONN_TO: $DEV_NAME" 14 45 6 \
+		1 "$TOGGLE_LABEL" \
+		2 "$T_M_SCAN" \
+		3 "$T_M_DISCONNECT" \
+		4 "$T_M_KNOWN" \
+		5 "$T_M_FORGET" \
+		6 "$T_MAIN_TITLE2" 2>&1 > "$CURR_TTY")
+			[ $? -ne 0 ] && ExitMenu
+		case $mainselection in
+			1) ToggleBT ;;
+			2) ScanAndConnect ;;
+			3) DisconnectProcess ;;
+			4) ListKnownAndConnect ;;
+			5) DeleteDevice ;;
+			6) UninstallerMenu ;;
+		esac
+	done
 }
 
 # -------------------------------------------------------
 # Gamepad Setup
 # -------------------------------------------------------
 export SDL_GAMECONTROLLERCONFIG_FILE="/opt/inttools/gamecontrollerdb.txt"
-sudo chmod 666 /dev/uinput
+chmod 666 /dev/uinput
+cp /opt/inttools/keys.gptk "$TMP_KEYS"
+if grep -q '^b = backspace' "$TMP_KEYS"; then
+    sed -i 's/^b = .*/b = esc/' "$TMP_KEYS"
+    sed -i 's/^a = .*/a = enter/' "$TMP_KEYS"
+fi
 StartGPTKeyb
 
 printf "\033[H\033[2J" > "$CURR_TTY"
 dialog --clear
 trap ExitMenu EXIT
+
 
 MainMenu
