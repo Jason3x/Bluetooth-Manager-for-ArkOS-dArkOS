@@ -54,6 +54,8 @@ Thank's to **djparent** for fix many problem
 
 ---
 
+The maintained fork is at [here](https://github.com/djparentx/BT-Manager) thank's to djparent for this 
+
 ## ☕ A coffee to support the project?
 
 [![Ko-fi](https://img.shields.io/badge/☕_Buy_me_a_coffee-jason3x-red?style=for-the-badge)](https://ko-fi.com/jason3x)
