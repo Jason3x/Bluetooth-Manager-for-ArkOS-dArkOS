@@ -5,6 +5,11 @@
 ![Shell](https://img.shields.io/badge/Bash-Script-yellow)
 ![License](https://img.shields.io/badge/License-Free-lightgrey)
 
+---
+**The maintained fork is at [here](https://github.com/djparentx/BT-Manager) thank's to djparent for this**
+
+---
+
 A complete Bluetooth management solution for the **R36XS running on Arkos & dArkOs**.  
 Designed for stability, automatic configuration, and seamless audio integration.
 
@@ -53,8 +58,6 @@ Thank's to **djparent** for fix many problem
 3. Launch it from the Tools section on your device.
 
 ---
-
-The maintained fork is at [here](https://github.com/djparentx/BT-Manager) thank's to djparent for this 
 
 ## ☕ A coffee to support the project?
 
